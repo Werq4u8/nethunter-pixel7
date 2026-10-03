@@ -1,4 +1,4 @@
-name: Build NetHunter Kernel for Pixel 7 (Android 16)
+name: Build NetHunter Kernel for Pixel 7 (Android 16 CP1A 6.1.145)
 
 on:
   workflow_dispatch:
@@ -37,19 +37,28 @@ jobs:
           chmod a+x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      - name: Initialize and Sync Kernel Source (Pixel 7 / Android 16 Beta)
+      - name: Initialize and Sync Kernel Source (Pixel 7 / Android 16)
         run: |
           mkdir -p workspace
           cd workspace
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
 
-          # Ветка 6.1-android16-beta содержит ядро 6.1.162, в точности совпадающее с прошивкой cp31 (Beta 3)
           repo init \
             -u https://android.googlesource.com/kernel/manifest \
             -b android-gs-pantah-6.1-android16-beta
 
           repo sync -c -j$(nproc) --no-clone-bundle --no-tags --optimized-fetch
+
+      - name: Checkout exact kernel commit matching CP1A (6.1.145)
+        run: |
+          cd workspace/aosp
+          echo "=== Текущее состояние дерева aosp ==="
+          git status
+          # Переключаем поддерево aosp (ядро Linux) на точный коммит прошивки CP1A: fa1d6308d1fe (версия 6.1.145)
+          git checkout fa1d6308d1fe
+          echo "=== Переключено на коммит: ==="
+          git log -1 --oneline
 
       - name: Patch Kernel config for NetHunter
         run: |
@@ -91,14 +100,14 @@ jobs:
       - name: Upload boot.img
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-boot-img-Pixel7-Android16-Beta
+          name: NetHunter-boot-img-Pixel7-Android16-CP1A-6.1.145
           path: workspace/out/**/boot.img
           retention-days: 7
 
       - name: Upload vendor images (.img)
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-vendor-images-Pixel7-Android16-Beta
+          name: NetHunter-vendor-images-Pixel7-Android16-CP1A-6.1.145
           path: |
             workspace/out/**/dtb.img
             workspace/out/**/vendor_boot.img
@@ -109,7 +118,7 @@ jobs:
       - name: Upload kernel modules (.ko)
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-kernel-modules-Pixel7-Android16-Beta
+          name: NetHunter-kernel-modules-Pixel7-Android16-CP1A-6.1.145
           path: workspace/out/**/*.ko
           retention-days: 7
         continue-on-error: true
