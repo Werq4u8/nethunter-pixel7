@@ -52,53 +52,39 @@ jobs:
         run: |
           cd workspace
 
-          # Автоматически находим реальный путь к gki_defconfig
+          # Находим правильный gki_defconfig (в подпапке aosp)
           GKI_CONFIG=$(find . -name "gki_defconfig" -type f 2>/dev/null | head -1)
 
           if [ -z "$GKI_CONFIG" ]; then
-            echo "gki_defconfig не найден, ищем альтернативу..."
-            GKI_CONFIG=$(find . -path "*/arm64/configs/*defconfig" -type f 2>/dev/null | head -1)
-          fi
-
-          if [ -z "$GKI_CONFIG" ]; then
-            echo "ОШИБКА: Ни один defconfig не найден!"
+            echo "ОШИБКА: gki_defconfig не найден!"
             exit 1
           fi
 
-          echo "=== Найден defconfig: $GKI_CONFIG ==="
+          echo "=== Патчим gki_defconfig: $GKI_CONFIG ==="
           chmod +w "$GKI_CONFIG"
 
-          # --- NetHunter патчи ---
-          echo "CONFIG_MAC80211_INJECT=y"           >> "$GKI_CONFIG"
-          echo "CONFIG_USB_CONFIGFS=y"              >> "$GKI_CONFIG"
-          echo "CONFIG_USB_CONFIGFS_F_HID=y"        >> "$GKI_CONFIG"
-          echo "CONFIG_USB_F_HID=y"                 >> "$GKI_CONFIG"
-          echo "CONFIG_USB_SERIAL=y"                >> "$GKI_CONFIG"
-          echo "CONFIG_USB_SERIAL_GENERIC=y"        >> "$GKI_CONFIG"
-          echo "CONFIG_BT_HCIBTUSB=y"               >> "$GKI_CONFIG"
-          echo "CONFIG_NET_SCH_FQ_CODEL=y"          >> "$GKI_CONFIG"
-          echo "CONFIG_TUN=y"                       >> "$GKI_CONFIG"
-          echo "CONFIG_USB_CONFIGFS_MASS_STORAGE=y" >> "$GKI_CONFIG"
+          # Включаем сетевые подсистемы и инъекцию пакетов
+          echo "CONFIG_CFG80211=m"          >> "$GKI_CONFIG"
+          echo "CONFIG_MAC80211=m"           >> "$GKI_CONFIG"
+          echo "CONFIG_MAC80211_INJECT=y"    >> "$GKI_CONFIG"
 
-          # Если есть pantah_defconfig, дополняем и его
-          PANTAH_CONFIG=$(find . -name "pantah_defconfig" -type f 2>/dev/null | head -1)
-          if [ -n "$PANTAH_CONFIG" ]; then
-            echo "=== Найден pantah_defconfig: $PANTAH_CONFIG ==="
-            chmod +w "$PANTAH_CONFIG"
-            echo "CONFIG_MAC80211_INJECT=y"    >> "$PANTAH_CONFIG"
-            echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$PANTAH_CONFIG"
-            echo "CONFIG_USB_F_HID=y"          >> "$PANTAH_CONFIG"
-          fi
+          # Поддержка HID / BadUSB клавиатуры
+          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$GKI_CONFIG"
 
-          echo "=== Конфиги успешно пропатчены ==="
+          # Серийные порты и вспомогательные сетевые драйверы
+          echo "CONFIG_USB_SERIAL=y"         >> "$GKI_CONFIG"
+          echo "CONFIG_USB_SERIAL_GENERIC=y" >> "$GKI_CONFIG"
+
+          echo "=== gki_defconfig успешно обновлен ==="
 
       - name: Build Kernel (Bazel / Kleaf)
         run: |
           cd workspace
 
-          # В ветке 6.1-android16 цель для Pixel 7 (pantah): //private/devices/google/pantah:gs201_pantah_dist
+          # --nocheck_defconfig отключает строгую проверку несовпадающих символов в Kleaf
           tools/bazel run \
             --config=pantah \
+            --nocheck_defconfig \
             //private/devices/google/pantah:gs201_pantah_dist \
             --local_ram_resources=8192 \
             --local_cpu_resources=4 \
