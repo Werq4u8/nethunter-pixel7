@@ -79,6 +79,9 @@ jobs:
           echo "CONFIG_MAC80211=m"      >> "$GKI_CONFIG"
           echo "CONFIG_MAC80211_INJECT=y" >> "$GKI_CONFIG"
 
+          # Отключаем устаревший rtl8150 чтобы избежать ошибки modpost usb_check_int_endpoints
+          echo "CONFIG_USB_RTL8150=n" >> "$GKI_CONFIG"
+
           echo "=== gki_defconfig успешно обновлен ==="
 
       - name: Build Kernel (Bazel / Kleaf)
