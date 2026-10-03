@@ -53,11 +53,10 @@ jobs:
       - name: Checkout exact kernel commit matching CP1A (6.1.145)
         run: |
           cd workspace/aosp
-          echo "=== Текущее состояние дерева aosp ==="
-          git status
-          # Переключаем поддерево aosp (ядро Linux) на точный коммит прошивки CP1A: fa1d6308d1fe (версия 6.1.145)
-          git checkout fa1d6308d1fe
-          echo "=== Переключено на коммит: ==="
+          echo "=== Подтягиваем тег android14-6.1-2025-09_r22 (коммит fa1d6308d1fe) ==="
+          git fetch --depth=1 https://android.googlesource.com/kernel/common refs/tags/android14-6.1-2025-09_r22:refs/tags/cp1a_tag
+          git checkout cp1a_tag
+          echo "=== Успешно переключено на коммит: ==="
           git log -1 --oneline
 
       - name: Patch Kernel config for NetHunter
