@@ -65,17 +65,11 @@ jobs:
           echo "=== Патчим gki_defconfig: $GKI_CONFIG ==="
           chmod +w "$GKI_CONFIG"
 
-          # Включаем сетевые подсистемы и инъекцию пакетов
-          echo "CONFIG_CFG80211=m"          >> "$GKI_CONFIG"
-          echo "CONFIG_MAC80211=m"           >> "$GKI_CONFIG"
-          echo "CONFIG_MAC80211_INJECT=y"    >> "$GKI_CONFIG"
-
-          # Поддержка HID / BadUSB клавиатуры
-          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$GKI_CONFIG"
-
-          # Серийные порты и вспомогательные сетевые драйверы
-          echo "CONFIG_USB_SERIAL=y"         >> "$GKI_CONFIG"
-          echo "CONFIG_USB_SERIAL_GENERIC=y" >> "$GKI_CONFIG"
+          # Включаем мониторный режим и packet injection
+          # (HID и USB_SERIAL уже включены как модули по умолчанию в GKI)
+          echo "CONFIG_CFG80211=m"       >> "$GKI_CONFIG"
+          echo "CONFIG_MAC80211=m"      >> "$GKI_CONFIG"
+          echo "CONFIG_MAC80211_INJECT=y" >> "$GKI_CONFIG"
 
           echo "=== gki_defconfig успешно обновлен ==="
 
