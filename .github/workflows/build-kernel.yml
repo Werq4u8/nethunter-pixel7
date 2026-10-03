@@ -48,20 +48,6 @@ jobs:
 
           repo sync -c -j$(nproc) --no-clone-bundle --no-tags --optimized-fetch
 
-      - name: Show workspace structure (debug)
-        run: |
-          cd workspace
-          echo "=== Корневые папки ==="
-          ls -la
-
-          echo ""
-          echo "=== Ищем ВСЕ файлы *defconfig* в workspace ==="
-          find . -name "*defconfig*" -type f 2>/dev/null | head -40
-
-          echo ""
-          echo "=== Ищем папку configs ==="
-          find . -type d -name "configs" 2>/dev/null | head -20
-
       - name: Patch Kernel config for NetHunter
         run: |
           cd workspace
@@ -69,76 +55,74 @@ jobs:
           # Автоматически находим реальный путь к gki_defconfig
           GKI_CONFIG=$(find . -name "gki_defconfig" -type f 2>/dev/null | head -1)
 
-          # Если gki_defconfig не нашли — ищем любой arm64 defconfig как запасной вариант
           if [ -z "$GKI_CONFIG" ]; then
             echo "gki_defconfig не найден, ищем альтернативу..."
             GKI_CONFIG=$(find . -path "*/arm64/configs/*defconfig" -type f 2>/dev/null | head -1)
           fi
 
           if [ -z "$GKI_CONFIG" ]; then
-            echo "ОШИБКА: Ни один defconfig не найден! Смотрите вывод предыдущего шага."
+            echo "ОШИБКА: Ни один defconfig не найден!"
             exit 1
           fi
 
           echo "=== Найден defconfig: $GKI_CONFIG ==="
-
-          # Снимаем блокировку read-only
           chmod +w "$GKI_CONFIG"
 
           # --- NetHunter патчи ---
-
-          # Packet Injection (мониторный режим Wi-Fi)
           echo "CONFIG_MAC80211_INJECT=y"           >> "$GKI_CONFIG"
-
-          # BadUSB / HID-клавиатура и мышь
           echo "CONFIG_USB_CONFIGFS=y"              >> "$GKI_CONFIG"
           echo "CONFIG_USB_CONFIGFS_F_HID=y"        >> "$GKI_CONFIG"
           echo "CONFIG_USB_F_HID=y"                 >> "$GKI_CONFIG"
-
-          # USB Serial (для внешних адаптеров)
           echo "CONFIG_USB_SERIAL=y"                >> "$GKI_CONFIG"
           echo "CONFIG_USB_SERIAL_GENERIC=y"        >> "$GKI_CONFIG"
-
-          # Bluetooth снифинг
           echo "CONFIG_BT_HCIBTUSB=y"               >> "$GKI_CONFIG"
-
-          # Network Scheduler (нужен для NetHunter App)
           echo "CONFIG_NET_SCH_FQ_CODEL=y"          >> "$GKI_CONFIG"
-
-          # VPN / TUN поддержка
           echo "CONFIG_TUN=y"                       >> "$GKI_CONFIG"
-
-          # CDROM Emulation (BadUSB сценарии)
           echo "CONFIG_USB_CONFIGFS_MASS_STORAGE=y" >> "$GKI_CONFIG"
 
-          echo "=== Патч успешно применён. Последние строки конфига: ==="
-          tail -15 "$GKI_CONFIG"
+          # Если есть pantah_defconfig, дополняем и его
+          PANTAH_CONFIG=$(find . -name "pantah_defconfig" -type f 2>/dev/null | head -1)
+          if [ -n "$PANTAH_CONFIG" ]; then
+            echo "=== Найден pantah_defconfig: $PANTAH_CONFIG ==="
+            chmod +w "$PANTAH_CONFIG"
+            echo "CONFIG_MAC80211_INJECT=y"    >> "$PANTAH_CONFIG"
+            echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$PANTAH_CONFIG"
+            echo "CONFIG_USB_F_HID=y"          >> "$PANTAH_CONFIG"
+          fi
+
+          echo "=== Конфиги успешно пропатчены ==="
 
       - name: Build Kernel (Bazel / Kleaf)
         run: |
           cd workspace
 
-          tools/bazel run //private/gs-google:panther_dist \
+          # В ветке 6.1-android16 цель для Pixel 7 (pantah): //private/devices/google/pantah:gs201_pantah_dist
+          tools/bazel run \
+            --config=pantah \
+            //private/devices/google/pantah:gs201_pantah_dist \
             --local_ram_resources=8192 \
             --local_cpu_resources=4 \
             -- \
             --dist_dir=out/dist
 
-          echo "=== Содержимое out/dist: ==="
-          ls -lh out/dist/
+          echo "=== Содержимое out/dist (или out/pantah/dist): ==="
+          ls -lh out/dist/ 2>/dev/null || ls -lh out/pantah/dist/ 2>/dev/null || find out/ -type f
 
       - name: Upload boot.img
         uses: actions/upload-artifact@v4
         with:
           name: NetHunter-boot-img-Pixel7-Android16
-          path: workspace/out/dist/boot.img
+          path: workspace/out/**/boot.img
           retention-days: 7
 
-      - name: Upload vendor_boot.img (если есть)
+      - name: Upload vendor images (.img)
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-vendor-boot-img-Pixel7-Android16
-          path: workspace/out/dist/vendor_boot.img
+          name: NetHunter-vendor-images-Pixel7-Android16
+          path: |
+            workspace/out/**/dtb.img
+            workspace/out/**/vendor_boot.img
+            workspace/out/**/vendor_kernel_boot.img
           retention-days: 7
         continue-on-error: true
 
@@ -146,6 +130,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: NetHunter-kernel-modules-Pixel7-Android16
-          path: workspace/out/dist/*.ko
+          path: workspace/out/**/*.ko
           retention-days: 7
         continue-on-error: true
