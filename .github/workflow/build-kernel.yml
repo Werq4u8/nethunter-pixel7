@@ -1,0 +1,151 @@
+name: Build NetHunter Kernel for Pixel 7 (Android 16)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        uses: easimon/maximize-build-space@master
+        with:
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-docker-images: 'true'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git-core gnupg flex bison build-essential zip curl \
+            zlib1g-dev libc6-dev-i386 libncurses5-dev x11proto-core-dev \
+            libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils \
+            xsltproc unzip fontconfig python3 python3-pip
+
+      - name: Install Repo tool
+        run: |
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Initialize and Sync Kernel Source (Pixel 7 / Android 16)
+        run: |
+          mkdir -p workspace
+          cd workspace
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+
+          repo init \
+            -u https://android.googlesource.com/kernel/manifest \
+            -b android-gs-pantah-6.1-android16
+
+          repo sync -c -j$(nproc) --no-clone-bundle --no-tags --optimized-fetch
+
+      - name: Show workspace structure (debug)
+        run: |
+          cd workspace
+          echo "=== Корневые папки ==="
+          ls -la
+
+          echo ""
+          echo "=== Ищем ВСЕ файлы *defconfig* в workspace ==="
+          find . -name "*defconfig*" -type f 2>/dev/null | head -40
+
+          echo ""
+          echo "=== Ищем папку configs ==="
+          find . -type d -name "configs" 2>/dev/null | head -20
+
+      - name: Patch Kernel config for NetHunter
+        run: |
+          cd workspace
+
+          # Автоматически находим реальный путь к gki_defconfig
+          GKI_CONFIG=$(find . -name "gki_defconfig" -type f 2>/dev/null | head -1)
+
+          # Если gki_defconfig не нашли — ищем любой arm64 defconfig как запасной вариант
+          if [ -z "$GKI_CONFIG" ]; then
+            echo "gki_defconfig не найден, ищем альтернативу..."
+            GKI_CONFIG=$(find . -path "*/arm64/configs/*defconfig" -type f 2>/dev/null | head -1)
+          fi
+
+          if [ -z "$GKI_CONFIG" ]; then
+            echo "ОШИБКА: Ни один defconfig не найден! Смотрите вывод предыдущего шага."
+            exit 1
+          fi
+
+          echo "=== Найден defconfig: $GKI_CONFIG ==="
+
+          # Снимаем блокировку read-only
+          chmod +w "$GKI_CONFIG"
+
+          # --- NetHunter патчи ---
+
+          # Packet Injection (мониторный режим Wi-Fi)
+          echo "CONFIG_MAC80211_INJECT=y"           >> "$GKI_CONFIG"
+
+          # BadUSB / HID-клавиатура и мышь
+          echo "CONFIG_USB_CONFIGFS=y"              >> "$GKI_CONFIG"
+          echo "CONFIG_USB_CONFIGFS_F_HID=y"        >> "$GKI_CONFIG"
+          echo "CONFIG_USB_F_HID=y"                 >> "$GKI_CONFIG"
+
+          # USB Serial (для внешних адаптеров)
+          echo "CONFIG_USB_SERIAL=y"                >> "$GKI_CONFIG"
+          echo "CONFIG_USB_SERIAL_GENERIC=y"        >> "$GKI_CONFIG"
+
+          # Bluetooth снифинг
+          echo "CONFIG_BT_HCIBTUSB=y"               >> "$GKI_CONFIG"
+
+          # Network Scheduler (нужен для NetHunter App)
+          echo "CONFIG_NET_SCH_FQ_CODEL=y"          >> "$GKI_CONFIG"
+
+          # VPN / TUN поддержка
+          echo "CONFIG_TUN=y"                       >> "$GKI_CONFIG"
+
+          # CDROM Emulation (BadUSB сценарии)
+          echo "CONFIG_USB_CONFIGFS_MASS_STORAGE=y" >> "$GKI_CONFIG"
+
+          echo "=== Патч успешно применён. Последние строки конфига: ==="
+          tail -15 "$GKI_CONFIG"
+
+      - name: Build Kernel (Bazel / Kleaf)
+        run: |
+          cd workspace
+
+          tools/bazel run //private/gs-google:panther_dist \
+            --local_ram_resources=8192 \
+            --local_cpu_resources=4 \
+            -- \
+            --dist_dir=out/dist
+
+          echo "=== Содержимое out/dist: ==="
+          ls -lh out/dist/
+
+      - name: Upload boot.img
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetHunter-boot-img-Pixel7-Android16
+          path: workspace/out/dist/boot.img
+          retention-days: 7
+
+      - name: Upload vendor_boot.img (если есть)
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetHunter-vendor-boot-img-Pixel7-Android16
+          path: workspace/out/dist/vendor_boot.img
+          retention-days: 7
+        continue-on-error: true
+
+      - name: Upload kernel modules (.ko)
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetHunter-kernel-modules-Pixel7-Android16
+          path: workspace/out/dist/*.ko
+          retention-days: 7
+        continue-on-error: true
