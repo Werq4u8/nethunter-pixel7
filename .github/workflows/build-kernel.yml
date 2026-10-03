@@ -37,16 +37,17 @@ jobs:
           chmod a+x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      - name: Initialize and Sync Kernel Source (Pixel 7 / Android 16)
+      - name: Initialize and Sync Kernel Source (Pixel 7 / Android 16 Beta)
         run: |
           mkdir -p workspace
           cd workspace
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
 
+          # Ветка 6.1-android16-beta содержит ядро 6.1.162, в точности совпадающее с прошивкой cp31 (Beta 3)
           repo init \
             -u https://android.googlesource.com/kernel/manifest \
-            -b android-gs-pantah-6.1-android16
+            -b android-gs-pantah-6.1-android16-beta
 
           repo sync -c -j$(nproc) --no-clone-bundle --no-tags --optimized-fetch
 
@@ -66,7 +67,6 @@ jobs:
           chmod +w "$GKI_CONFIG"
 
           # Включаем мониторный режим и packet injection
-          # (HID и USB_SERIAL уже включены как модули по умолчанию в GKI)
           echo "CONFIG_CFG80211=m"       >> "$GKI_CONFIG"
           echo "CONFIG_MAC80211=m"      >> "$GKI_CONFIG"
           echo "CONFIG_MAC80211_INJECT=y" >> "$GKI_CONFIG"
@@ -91,14 +91,14 @@ jobs:
       - name: Upload boot.img
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-boot-img-Pixel7-Android16
+          name: NetHunter-boot-img-Pixel7-Android16-Beta
           path: workspace/out/**/boot.img
           retention-days: 7
 
       - name: Upload vendor images (.img)
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-vendor-images-Pixel7-Android16
+          name: NetHunter-vendor-images-Pixel7-Android16-Beta
           path: |
             workspace/out/**/dtb.img
             workspace/out/**/vendor_boot.img
@@ -109,7 +109,7 @@ jobs:
       - name: Upload kernel modules (.ko)
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-kernel-modules-Pixel7-Android16
+          name: NetHunter-kernel-modules-Pixel7-Android16-Beta
           path: workspace/out/**/*.ko
           retention-days: 7
         continue-on-error: true
