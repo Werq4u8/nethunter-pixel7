@@ -81,10 +81,8 @@ jobs:
         run: |
           cd workspace
 
-          # --nocheck_defconfig отключает строгую проверку несовпадающих символов в Kleaf
           tools/bazel run \
             --config=pantah \
-            --nocheck_defconfig \
             //private/devices/google/pantah:gs201_pantah_dist \
             --local_ram_resources=8192 \
             --local_cpu_resources=4 \
