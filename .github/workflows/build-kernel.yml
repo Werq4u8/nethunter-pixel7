@@ -84,43 +84,58 @@ jobs:
 
           echo "=== gki_defconfig успешно обновлен ==="
 
-      - name: Build Kernel (Bazel / Kleaf)
+      - name: Build Kernel from Source (Bazel / Kleaf)
         run: |
           cd workspace
 
+          echo "=== Отключаем prebuilt GKI во всех bazelrc ==="
+          find . -name "*.bazelrc" -exec sed -i 's/build --use_prebuilt_gki=true/build --use_prebuilt_gki=false/g' {} + || true
+          find . -name "*.bazelrc" -exec sed -i 's/build --use_signed_prebuilts=true/build --use_signed_prebuilts=false/g' {} + || true
+          find . -name "*.bazelrc" -exec sed -i 's/build --download_prebuilt_gki_fips140=true/build --download_prebuilt_gki_fips140=false/g' {} + || true
+
           tools/bazel run \
             --config=pantah \
+            --use_prebuilt_gki=false \
+            --use_signed_prebuilts=false \
+            --download_prebuilt_gki_fips140=false \
+            --notrim \
+            --nokmi_symbol_list_violations_check \
+            --nokmi_symbol_list_strict_mode \
             //private/devices/google/pantah:gs201_pantah_dist \
             --local_ram_resources=8192 \
             --local_cpu_resources=4 \
             -- \
             --dist_dir=out/dist
 
-          echo "=== Содержимое out/dist (или out/pantah/dist): ==="
-          ls -lh out/dist/ 2>/dev/null || ls -lh out/pantah/dist/ 2>/dev/null || find out/ -type f
+          echo "=== Проверяем версию собранного ядра в out/dist/Image ==="
+          strings out/dist/Image | grep -E "Linux version [0-9]" | head -2 || true
 
-      - name: Upload boot.img
+      - name: Package Artifacts Cleanly
+        run: |
+          mkdir -p package/images package/modules
+          
+          # Копируем образы разделов из out/dist
+          cp workspace/out/dist/boot.img package/images/ || true
+          cp workspace/out/dist/dtb.img package/images/ || true
+          cp workspace/out/dist/vendor_kernel_boot.img package/images/ || true
+          cp workspace/out/dist/vendor_boot.img package/images/ || true
+
+          # Копируем модули (.ko) и пакуем в плоский ZIP для Windows
+          cp workspace/out/dist/*.ko package/modules/ || true
+          cd package/modules
+          zip -r ../nethunter-modules-cp1a-6.1.145.zip *.ko
+          cd ../..
+
+      - name: Upload Boot & Vendor Images
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-boot-img-Pixel7-Android16-CP1A-6.1.145
-          path: workspace/out/**/boot.img
+          name: NetHunter-Images-Pixel7-Android16-CP1A-6.1.145
+          path: package/images/*
           retention-days: 7
 
-      - name: Upload vendor images (.img)
+      - name: Upload Kernel Modules (Clean ZIP)
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-vendor-images-Pixel7-Android16-CP1A-6.1.145
-          path: |
-            workspace/out/**/dtb.img
-            workspace/out/**/vendor_boot.img
-            workspace/out/**/vendor_kernel_boot.img
+          name: NetHunter-Modules-Pixel7-Android16-CP1A-6.1.145
+          path: package/nethunter-modules-cp1a-6.1.145.zip
           retention-days: 7
-        continue-on-error: true
-
-      - name: Upload kernel modules (.ko)
-        uses: actions/upload-artifact@v4
-        with:
-          name: NetHunter-kernel-modules-Pixel7-Android16-CP1A-6.1.145
-          path: workspace/out/**/*.ko
-          retention-days: 7
-        continue-on-error: true
