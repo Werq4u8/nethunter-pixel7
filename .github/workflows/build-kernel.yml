@@ -84,18 +84,19 @@ jobs:
 
           echo "=== gki_defconfig успешно обновлен ==="
 
-      - name: Build Kernel from Source (Bazel / Kleaf)
+      - name: Build Kernel (Bazel / Kleaf)
         run: |
           cd workspace
 
-          echo "=== Отключаем prebuilt GKI во всех bazelrc ==="
-          find . -name "*.bazelrc" -exec sed -i 's/build --use_prebuilt_gki=true/build --use_prebuilt_gki=false/g' {} + || true
+          echo "=== Заменяем номер GKI сборки на 14691759 (версия 6.1.145 под CP1A) ==="
+          find . -name "*.bazelrc" -exec sed -i 's/13202960/14691759/g' {} + || true
           find . -name "*.bazelrc" -exec sed -i 's/build --use_signed_prebuilts=true/build --use_signed_prebuilts=false/g' {} + || true
           find . -name "*.bazelrc" -exec sed -i 's/build --download_prebuilt_gki_fips140=true/build --download_prebuilt_gki_fips140=false/g' {} + || true
 
           tools/bazel run \
             --config=pantah \
-            --use_prebuilt_gki=false \
+            --action_env=KLEAF_DOWNLOAD_BUILD_NUMBER_MAP="gki_prebuilts=14691759,gki_prebuilts_aarch64_16k=14691759" \
+            --use_prebuilt_gki=true \
             --use_signed_prebuilts=false \
             --download_prebuilt_gki_fips140=false \
             --notrim \
